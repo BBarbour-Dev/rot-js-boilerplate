@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Rot.js Roguelike</title>
+    <script src="https://unpkg.com/rot-js/dist/rot.js"></script>
+    <style>
+      #game-container {
+        width: 800px;
+        margin: 0 auto;
+        font-family: monospace;
+      }
+      .cell {
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container"></div>
+
+    <script type="module">
+      import { Game } from '/game.js';
+      window.onload = () => new Game().init();
+    </script>
+  </body>
+</html>
