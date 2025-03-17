@@ -152,7 +152,7 @@ export class Game {
       case code in keyMap:
         await this.player.move(keyMap[code]);
         return true;
-      case code === 'KeyW':
+      case code === 'Space':
         console.log('wait');
         await this.player.wait();
         return true;

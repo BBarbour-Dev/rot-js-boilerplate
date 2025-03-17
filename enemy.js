@@ -23,7 +23,7 @@ export class Enemy {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const next = this.game.scheduler.next();
-    next.act();
+    await next.act();
   }
 
   checkPlayerVisibility() {

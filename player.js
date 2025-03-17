@@ -9,6 +9,7 @@ export class Player {
   }
 
   async act() {
+    this.moves = this.speed;
     this.frozen = false;
   }
 
@@ -31,7 +32,6 @@ export class Player {
     }
 
     if (this.moves < 1) {
-      this.moves = 2;
       this.frozen = true;
       const next = this.game.scheduler.next();
       await next.act();
