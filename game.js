@@ -14,6 +14,12 @@ export class Game {
     this.visibleEnemies = [];
   }
 
+  static destroy(gameInstance) {
+    const container = document.querySelector('#game-container');
+    container.innerHTML = '';
+    gameInstance = null;
+  }
+
   init() {
     this.display = new ROT.Display({
       width: 80,
@@ -188,9 +194,5 @@ export class Game {
         break;
     }
     return true;
-  }
-
-  destroy() {
-    document.querySelector('#game-container');
   }
 }
