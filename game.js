@@ -8,8 +8,10 @@ export class Game {
     this.player = null;
     this.map = {};
     this.fov = null;
+    this.fovCells = null;
     this.explored = new Set();
     this.enemies = [];
+    this.visibleEnemies = [];
   }
 
   init() {
@@ -29,7 +31,7 @@ export class Game {
     this.enemies.forEach((enemy) => this.scheduler.add(enemy, true));
 
     this.bindInput();
-    this.updateFOV();
+    this.update();
   }
 
   generateMap(enemyCount) {
@@ -68,20 +70,15 @@ export class Game {
     }
   }
 
-  updateFOV() {
+  update() {
     const lightPasses = (x, y) => {
       const key = `${x},${y}`;
       return this.map[key] === 'floor';
     };
 
     this.fov = new ROT.FOV.PreciseShadowcasting(lightPasses);
-    this.refreshDisplay();
-  }
 
-  refreshDisplay() {
-    this.display.clear();
-
-    const currentVisible = new Set();
+    this.fovCells = new Set();
 
     // Draw visible area
     this.fov.compute(
@@ -91,45 +88,52 @@ export class Game {
       (x, y, r, visibility) => {
         const key = `${x},${y}`;
         this.explored.add(key);
-        currentVisible.add(key);
-
-        // Determine base color based on visibility
-        let color;
-        if (visibility < 0.3) color = '#666';
-        else if (visibility < 0.6) color = '#999';
-        else color = '#fff';
-
-        // Draw terrain
-        const terrainChar = this.map[key] === 'wall' ? '#' : '.';
-        this.display.draw(x, y, terrainChar, color);
-
-        // Draw enemies in FOV
-        const enemy = this.enemies.find((e) => e.x === x && e.y === y);
-        if (enemy) {
-          this.display.draw(x, y, 'e', '#ff0000');
-        }
+        this.fovCells.add({ key, visibility });
       }
     );
 
+    this.draw();
+  }
+
+  draw() {
+    this.display.clear();
+
+    this.fovCells.forEach(({ key, visibility }) => {
+      const [x, y] = key.split(',').map(Number);
+      // Determine base color based on visibility
+      let color;
+      if (visibility < 0.3) color = '#666';
+      else if (visibility < 0.6) color = '#999';
+      else color = '#fff';
+
+      // Draw terrain
+      const terrainChar = this.map[key] === 'wall' ? '#' : '.';
+      this.display.draw(x, y, terrainChar, color);
+    });
+
     // Draw explored but not visible areas
     this.explored.forEach((key) => {
-      if (!currentVisible.has(key)) {
+      const hasKey = Array.from(this.fovCells).some((item) => item.key === key);
+      if (!hasKey) {
         const [x, y] = key.split(',').map(Number);
         const terrainChar = this.map[key] === 'wall' ? '#' : '.';
         this.display.draw(x, y, terrainChar, '#444444');
       }
     });
 
+    this.enemies.forEach((enemy) => {
+      const key = `${enemy.x},${enemy.y}`;
+      const hasKey = Array.from(this.fovCells).some((item) => item.key === key);
+      if (hasKey) {
+        const isTarget =
+          this.visibleEnemies[this.player.currentTargetIndex] === enemy;
+        const bgColor = isTarget ? 'white' : null;
+        this.display.draw(enemy.x, enemy.y, 'e', 'red', bgColor);
+      }
+    });
+
     // Draw player on top
     this.display.draw(this.player.x, this.player.y, '@', '#ff0');
-  }
-
-  isPositionBlocked(x, y) {
-    return (
-      this.map[`${x},${y}`] === 'wall' ||
-      this.enemies.some((e) => e.x === x && e.y === y) ||
-      (this.player.x === x && this.player.y === y)
-    );
   }
 
   bindInput() {
@@ -140,24 +144,34 @@ export class Game {
     });
   }
 
-  async handleEvent(code) {
-    console.log(code);
+  handleEvent(code) {
     const keyMap = {
-      ArrowUp: 0, // up
-      ArrowRight: 1, // right
-      ArrowDown: 2, // down
-      ArrowLeft: 3 // left
+      ArrowUp: 0,
+      ArrowRight: 1,
+      ArrowDown: 2,
+      ArrowLeft: 3,
+      KeyZ: 'cycle',
+      KeyX: 'shoot',
+      Space: 'wait'
     };
-    switch (true) {
-      case code in keyMap:
-        await this.player.move(keyMap[code]);
-        return true;
-      case code === 'Space':
-        console.log('wait');
-        await this.player.wait();
-        return true;
-      default:
-        return false;
+
+    switch (keyMap[code]) {
+      case 0:
+      case 1:
+      case 2:
+      case 3:
+        this.player.move(keyMap[code]);
+        break;
+      case 'cycle':
+        this.player.cycleTarget();
+        break;
+      case 'shoot':
+        this.player.shootTarget();
+        break;
+      case 'wait':
+        this.player.wait();
+        break;
     }
+    return true;
   }
 }

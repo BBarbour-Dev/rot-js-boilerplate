@@ -6,41 +6,84 @@ export class Player {
     this.moves = 2;
     this.speed = 2;
     this.frozen = false;
+    this.currentTargetIndex = -1;
   }
 
-  async act() {
+  act() {
     this.moves = this.speed;
     this.frozen = false;
   }
 
-  async move(direction) {
+  move(direction) {
     if (this.frozen) return;
+
     const dirs = ROT.DIRS[4];
     const [dx, dy] = dirs[direction];
     const newX = this.x + dx;
     const newY = this.y + dy;
     const key = `${newX},${newY}`;
 
-    if (
-      this.game.map[key] === 'floor' &&
-      !this.game.enemies.some((e) => e.x === newX && e.y === newY)
-    ) {
+    const occupyingEnemy = this.game.enemies.find(
+      (e) => e.x === newX && e.y === newY
+    );
+
+    if (occupyingEnemy) {
+      this.melee(occupyingEnemy);
+      this.endTurn();
+      this.game.update();
+      return;
+    }
+
+    if (this.game.map[key] === 'floor' && !occupyingEnemy) {
       this.x = newX;
       this.y = newY;
-      this.game.updateFOV();
+      this.game.update();
       this.moves -= 1;
     }
 
-    if (this.moves < 1) {
-      this.frozen = true;
-      const next = this.game.scheduler.next();
-      await next.act();
-    }
+    if (this.moves < 1) this.endTurn();
   }
 
-  async wait() {
+  wait() {
+    this.endTurn();
+  }
+
+  endTurn() {
     this.frozen = true;
+    this.moves = 0;
     const next = this.game.scheduler.next();
-    await next.act();
+    next.act();
+  }
+
+  cycleTarget() {
+    // Filter enemies in player's FOV
+    this.game.visibleEnemies = this.game.enemies.filter((enemy) => {
+      const key = `${enemy.x},${enemy.y}`;
+      const hasKey = Array.from(this.game.fovCells).some((item) => {
+        return item.key === key;
+      });
+      return hasKey;
+    });
+
+    if (this.game.visibleEnemies.length === 0) {
+      this.currentTargetIndex = -1;
+      return;
+    }
+
+    this.currentTargetIndex =
+      (this.currentTargetIndex + 1) % this.game.visibleEnemies.length;
+    this.game.update();
+  }
+
+  shootTarget() {
+    if (!this.game.visibleEnemies[this.currentTargetIndex]) return;
+
+    const target = this.game.visibleEnemies[this.currentTargetIndex];
+    console.log(`Shooting ${target.id}`);
+    this.endTurn();
+  }
+
+  melee(enemy) {
+    console.log(`Melee ${enemy.id}`);
   }
 }
