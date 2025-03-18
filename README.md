@@ -1,6 +1,6 @@
 This is a basic boilerplate to get started making a roguelike using the rot-js library. 
 
-Just clone the repo and run it on a local web server, a dev sever, or your backend and serve static.
+Just clone the repo and run it with VSCode Live Server extension, a bundler/dev sever like Vite, or serve static from your web server.
 
 Features
 
