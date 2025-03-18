@@ -21,7 +21,7 @@ export class Game {
       fontSize: 16
     });
     document
-      .getElementById('game-container')
+      .querySelector('#game-container')
       .appendChild(this.display.getContainer());
 
     this.generateMap(5);
@@ -52,7 +52,12 @@ export class Game {
     for (let i = 0; i < enemyCount; i++) {
       const index = Math.floor(ROT.RNG.getUniform() * floorCells.length);
       const { x, y } = floorCells.splice(index, 1)[0];
-      this.enemies.push(new Enemy(this, x, y));
+
+      if (i >= 3) {
+        this.enemies.push(new Enemy(this, x, y, 5, 15));
+      } else {
+        this.enemies.push(new Enemy(this, x, y));
+      }
     }
   }
 
@@ -84,7 +89,7 @@ export class Game {
     this.fov.compute(
       this.player.x,
       this.player.y,
-      10,
+      this.player.vision,
       (x, y, r, visibility) => {
         const key = `${x},${y}`;
         this.explored.add(key);
@@ -132,6 +137,15 @@ export class Game {
       }
     });
 
+    // Filter enemies in player's FOV
+    this.visibleEnemies = this.enemies.filter((enemy) => {
+      const key = `${enemy.x},${enemy.y}`;
+      const hasKey = Array.from(this.fovCells).some((item) => {
+        return item.key === key;
+      });
+      return hasKey;
+    });
+
     // Draw player on top
     this.display.draw(this.player.x, this.player.y, '@', '#ff0');
   }
@@ -169,9 +183,14 @@ export class Game {
         this.player.shootTarget();
         break;
       case 'wait':
+        console.log('waiting...');
         this.player.wait();
         break;
     }
     return true;
+  }
+
+  destroy() {
+    document.querySelector('#game-container');
   }
 }

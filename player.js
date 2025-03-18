@@ -3,6 +3,7 @@ export class Player {
     this.game = game;
     this.x = x;
     this.y = y;
+    this.vision = 15;
     this.moves = 2;
     this.speed = 2;
     this.frozen = false;
@@ -56,15 +57,6 @@ export class Player {
   }
 
   cycleTarget() {
-    // Filter enemies in player's FOV
-    this.game.visibleEnemies = this.game.enemies.filter((enemy) => {
-      const key = `${enemy.x},${enemy.y}`;
-      const hasKey = Array.from(this.game.fovCells).some((item) => {
-        return item.key === key;
-      });
-      return hasKey;
-    });
-
     if (this.game.visibleEnemies.length === 0) {
       this.currentTargetIndex = -1;
       return;

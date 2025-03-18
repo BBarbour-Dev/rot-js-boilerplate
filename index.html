@@ -2,7 +2,10 @@
 <html>
   <head>
     <title>Rot.js Roguelike</title>
-    <script src="https://unpkg.com/rot-js/dist/rot.js"></script>
+    <script
+      src="https://unpkg.com/rot-js/dist/rot.js"
+      defer
+    ></script>
     <style>
       #game-container {
         width: 800px;
@@ -16,10 +19,15 @@
   </head>
   <body>
     <div id="game-container"></div>
-
-    <script type="module">
-      import { Game } from '/game.js';
-      window.onload = () => new Game().init();
-    </script>
+    <button
+      data-restart
+      type="button"
+    >
+      Restart
+    </button>
+    <script
+      type="module"
+      src="/main.js"
+    ></script>
   </body>
 </html>

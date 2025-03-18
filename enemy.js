@@ -1,7 +1,7 @@
-import { shuffleArray } from './helpers.js';
+import { chebyshev, shuffleArray } from './helpers.js';
 
 export class Enemy {
-  constructor(game, x, y, range = 1) {
+  constructor(game, x, y, range = 1, vision = 8) {
     this.game = game;
     this.id = Math.random().toString(36).substring(2, 9);
     this.x = x;
@@ -11,12 +11,26 @@ export class Enemy {
     this.aggro = false;
     this.path = [];
     this.range = range;
+    this.vision = vision;
   }
 
   act() {
     if (this.checkPlayerVisibility()) {
       this.aggro = true;
-      this.moveTowardsPlayer();
+
+      // Calculate distance to player
+      const distance = chebyshev(
+        this.x,
+        this.y,
+        this.game.player.x,
+        this.game.player.y
+      );
+
+      if (this.range > 1 && distance <= this.range) {
+        this.shoot();
+      } else {
+        this.moveTowardsPlayer();
+      }
     } else if (this.aggro) {
       this.returnToSpawn();
     }
@@ -27,13 +41,18 @@ export class Enemy {
     next.act();
   }
 
+  shoot() {
+    console.log(`Enemy ${this.id} fires at player!`);
+    // Add actual attack logic here later
+  }
+
   checkPlayerVisibility() {
     const fov = new ROT.FOV.PreciseShadowcasting(
       (x, y) => this.game.map[`${x},${y}`] === 'floor'
     );
     let playerVisible = false;
 
-    fov.compute(this.x, this.y, 8, (x, y) => {
+    fov.compute(this.x, this.y, this.vision, (x, y) => {
       if (x === this.game.player.x && y === this.game.player.y) {
         playerVisible = true;
       }
