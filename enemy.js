@@ -1,8 +1,8 @@
-import { chebyshev, shuffleArray } from './helpers.js';
+import { Game } from './game.js';
+import { chebyshev, shuffleArray } from './utils.js';
 
 export class Enemy {
-  constructor(game, x, y, range = 1, vision = 8) {
-    this.game = game;
+  constructor(x, y, range = 1, vision = 8) {
     this.id = Math.random().toString(36).substring(2, 9);
     this.x = x;
     this.y = y;
@@ -12,50 +12,45 @@ export class Enemy {
     this.path = [];
     this.range = range;
     this.vision = vision;
+    this.hp = 3;
+    this.hpMax = 3;
+    this.name = `Enemy ${range > 1 ? 'gunman' : 'brute'}`;
   }
 
   act() {
-    if (this.checkPlayerVisibility()) {
+    if (!this.aggro && this.checkPlayerVisibility()) {
       this.aggro = true;
-
+    }
+    if (this.aggro) {
       // Calculate distance to player
-      const distance = chebyshev(
-        this.x,
-        this.y,
-        this.game.player.x,
-        this.game.player.y
-      );
-
-      if (this.range > 1 && distance <= this.range) {
-        this.shoot();
+      const distance = chebyshev(this.x, this.y, Game.player.x, Game.player.y);
+      if (
+        this.range > 1 &&
+        distance <= this.range &&
+        this.checkPlayerVisibility()
+      ) {
+        this.shoot(Game.player);
       } else {
         this.moveTowardsPlayer();
       }
-    } else if (this.aggro) {
-      this.returnToSpawn();
     }
-
-    this.game.update();
-
-    const next = this.game.scheduler.next();
-    next.act();
+    this.endTurn();
   }
 
-  shoot() {
-    console.log(`Enemy ${this.id} fires at player!`);
-    // Add actual attack logic here later
+  endTurn() {
+    const next = Game.scheduler.next();
+    if (!next) return;
+    Game.updateFOV();
+    next.act();
   }
 
   checkPlayerVisibility() {
     const fov = new ROT.FOV.PreciseShadowcasting(
-      (x, y) => this.game.map[`${x},${y}`] === 'floor'
+      (x, y) => Game.map[`${x},${y}`] === 'floor'
     );
     let playerVisible = false;
-
     fov.compute(this.x, this.y, this.vision, (x, y) => {
-      if (x === this.game.player.x && y === this.game.player.y) {
-        playerVisible = true;
-      }
+      if (x === Game.player.x && y === Game.player.y) playerVisible = true;
     });
     return playerVisible;
   }
@@ -63,32 +58,26 @@ export class Enemy {
   moveTowardsPlayer() {
     // Create pathfinder with enemy-aware passability check
     const pathfinder = new ROT.Path.AStar(
-      this.game.player.x,
-      this.game.player.y,
+      Game.player.x,
+      Game.player.y,
       (x, y) => {
         // Check if cell is floor and not occupied by other enemies
-        const isFloor = this.game.map[`${x},${y}`] === 'floor';
-        const hasEnemy = this.game.enemies.some(
+        const isFloor = Game.map[`${x},${y}`] === 'floor';
+        const hasEnemy = Game.enemies.some(
           (e) => e !== this && e.x === x && e.y === y
         );
         return isFloor && !hasEnemy;
       },
       { topology: 4 }
     );
-
     this.path = [];
-    pathfinder.compute(this.x, this.y, (x, y) => {
-      this.path.push([x, y]);
-    });
-
+    pathfinder.compute(this.x, this.y, (x, y) => this.path.push([x, y]));
     if (this.path.length > 1) {
       const [nextX, nextY] = this.path[1];
-
       // Check if another enemy is already in the target position
-      const positionBlocked = this.game.enemies.some(
+      const positionBlocked = Game.enemies.some(
         (e) => e !== this && e.x === nextX && e.y === nextY
       );
-
       if (!positionBlocked) {
         this.tryMove(nextX, nextY);
       } else {
@@ -102,7 +91,6 @@ export class Enemy {
     // Try moving in adjacent directions as fallback
     const directions = shuffleArray([0, 1, 2, 3]); // Up, Right, Down, Left
     const dirs = ROT.DIRS[4];
-
     for (const dir of directions) {
       const [dx, dy] = dirs[dir];
       const newX = this.x + dx;
@@ -120,19 +108,16 @@ export class Enemy {
       this.aggro = false;
       return;
     }
-
     const pathfinder = new ROT.Path.AStar(
       this.spawnX,
       this.spawnY,
-      (x, y) => this.game.map[`${x},${y}`] === 'floor',
+      (x, y) => Game.map[`${x},${y}`] === 'floor',
       { topology: 4 }
     );
-
     const returnPath = [];
     pathfinder.compute(this.x, this.y, (x, y) => {
       returnPath.push([x, y]);
     });
-
     if (returnPath.length > 1) {
       const [nextX, nextY] = returnPath[1];
       this.tryMove(nextX, nextY);
@@ -141,9 +126,9 @@ export class Enemy {
 
   isPositionBlocked(x, y) {
     return (
-      this.game.map[`${x},${y}`] === 'wall' ||
-      this.game.enemies.some((e) => e.x === x && e.y === y) ||
-      (this.game.player.x === x && this.game.player.y === y)
+      Game.map[`${x},${y}`] === 'wall' ||
+      Game.enemies.some((e) => e.x === x && e.y === y) ||
+      (Game.player.x === x && Game.player.y === y)
     );
   }
 
@@ -152,10 +137,36 @@ export class Enemy {
       this.x = x;
       this.y = y;
     }
-
     // Check for collision with player
-    if (x === this.game.player.x && y === this.game.player.y) {
-      console.log(`Enemy ${this.id} strikes you.`);
+    if (x === Game.player.x && y === Game.player.y) {
+      this.melee(Game.player);
     }
+  }
+
+  shoot(target) {
+    const roll = ROT.RNG.getPercentage();
+    if (roll <= 50) {
+      Game.addLog(`:: ${this.name} shoots you for 1 damage.`);
+      target.takeDamage(1);
+    } else {
+      Game.addLog(`:: ${this.name} shoots at you and misses.`);
+    }
+  }
+
+  melee(target) {
+    Game.addLog(`:: ${this.name} strikes you for 1 damage.`);
+    target.takeDamage(1);
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+    if (this.hp <= 0) this.die();
+  }
+
+  die() {
+    Game.addLog(`:: ${this.name} is defeated.`);
+    Game.scheduler.remove(this);
+    Game.enemies = Game.enemies.filter((e) => e.id !== this.id);
+    Game.checkWinCondition();
   }
 }

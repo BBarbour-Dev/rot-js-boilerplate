@@ -1,81 +1,109 @@
+import { Game } from './game.js';
+import { chebyshev } from './utils.js';
+
 export class Player {
-  constructor(game, x, y) {
-    this.game = game;
+  constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.vision = 15;
-    this.moves = 2;
-    this.speed = 2;
     this.frozen = false;
-    this.currentTargetIndex = -1;
+    this.hp = 6;
+    this.hpMax = 6;
+    this.ammo = 4;
+    this.ammoMax = 4;
+    this.range = 8;
   }
 
   act() {
-    this.moves = this.speed;
+    if (Game.victory) return;
     this.frozen = false;
   }
 
   move(direction) {
     if (this.frozen) return;
-
     const dirs = ROT.DIRS[4];
     const [dx, dy] = dirs[direction];
     const newX = this.x + dx;
     const newY = this.y + dy;
     const key = `${newX},${newY}`;
-
-    const occupyingEnemy = this.game.enemies.find(
+    const occupyingEnemy = Game.enemies.find(
       (e) => e.x === newX && e.y === newY
     );
-
     if (occupyingEnemy) {
       this.melee(occupyingEnemy);
-      this.endTurn();
-      this.game.update();
       return;
     }
-
-    if (this.game.map[key] === 'floor' && !occupyingEnemy) {
+    if (Game.map[key] === 'floor' && !occupyingEnemy) {
       this.x = newX;
       this.y = newY;
-      this.game.update();
-      this.moves -= 1;
+      this.endTurn();
     }
-
-    if (this.moves < 1) this.endTurn();
-  }
-
-  wait() {
-    this.endTurn();
   }
 
   endTurn() {
     this.frozen = true;
-    this.moves = 0;
-    const next = this.game.scheduler.next();
+    const next = Game.scheduler.next();
+    if (!next) return;
+    Game.isAiming = false;
+    Game.updateFOV();
     next.act();
   }
 
-  cycleTarget() {
-    if (this.game.visibleEnemies.length === 0) {
-      this.currentTargetIndex = -1;
+  melee(target) {
+    const dmg = Math.round(ROT.RNG.getUniform() * 4) + 1;
+    Game.addLog(`:: You strike the ${target.name} for ${dmg} damage.`);
+    target.takeDamage(dmg);
+    if (Game.victory) {
+      this.frozen = true;
       return;
     }
-
-    this.currentTargetIndex =
-      (this.currentTargetIndex + 1) % this.game.visibleEnemies.length;
-    this.game.update();
-  }
-
-  shootTarget() {
-    if (!this.game.visibleEnemies[this.currentTargetIndex]) return;
-
-    const target = this.game.visibleEnemies[this.currentTargetIndex];
-    console.log(`Shooting ${target.id}`);
     this.endTurn();
   }
 
-  melee(enemy) {
-    console.log(`Melee ${enemy.id}`);
+  reload() {
+    this.ammo = this.ammoMax;
+    Game.addLog(':: You reload your gun.');
+    this.endTurn();
+  }
+
+  shoot() {
+    if (this.ammo <= 0) {
+      Game.info = 'Click! Out of ammo.';
+      this.reload();
+    }
+    const clear = Game.fovCells.has(`${Game.aimX},${Game.aimY}`);
+    const enemy = Game.getEnemyAt(Game.aimX, Game.aimY);
+    if (!clear) {
+      Game.info = 'No enemy visible.';
+      return;
+    }
+    if (!enemy) {
+      Game.info = 'No enemy at location.';
+      return;
+    }
+    const distance = chebyshev(this.x, this.y, enemy.x, enemy.y);
+    if (distance > this.range) {
+      Game.info = 'Enemy out of range.';
+      return;
+    }
+    this.ammo--;
+    Game.addLog(`:: You shoot the ${enemy.name} for 2 damage.`);
+    enemy.takeDamage(2);
+    if (Game.victory) {
+      this.frozen = true;
+      return;
+    }
+    return true;
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.frozen = true;
+      Game.scheduler.clear();
+      Game.display.draw(this.x, this.y, 'X', 'red');
+      Game.addLog(':: You are defeated. Reload the page to try again.');
+      return;
+    }
   }
 }
